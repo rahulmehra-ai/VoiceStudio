@@ -1,0 +1,55 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch: # Allows manual trigger from the GitHub "Actions" tab
+  push:
+    paths:
+      - 'mobile/android/**'
+      - '.github/workflows/build-android.yml'
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Bun (for token generation)
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv and Generate Contracts
+        run: |
+          pip install uv
+          bun install
+          bun run scripts/export-mobile-tokens.ts || true
+          uv run python scripts/export_openapi.py || true
+
+      - name: Make Gradle Executable
+        run: chmod +x mobile/android/gradlew
+
+      - name: Build Debug APK
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoiceStudio-Android-Debug
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
